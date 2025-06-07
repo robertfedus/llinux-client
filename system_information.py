@@ -558,23 +558,8 @@ class SystemInformation:
 
     def get_cpu_load(self):
         try:
-            output = self.executor.run_command("cat /proc/stat | grep '^cpu '")
-            parts = output.split()
-            if len(parts) < 8:
-                return "Unknown"
-
-            user, nice, system, idle, iowait, irq, softirq, steal = map(int, parts[1:9])
-
-            idle_all = idle + iowait
-            non_idle = user + nice + system + irq + softirq + steal
-            total = idle_all + non_idle
-
-            if total == 0:
-                return "0.0%"
-
-            usage = 100 * (non_idle / total)
-            return f"{usage:.1f}%"
-
+            return self.executor.run_command("echo $[100-$(vmstat 1 2|tail -1|awk '{print $15}')]")
+            
         except Exception:
             return "Unknown"
 
@@ -591,7 +576,7 @@ class SystemInformation:
         return "Unknown"
 
     def get_disk_load(self):
-        raw = self.executor.run_command("df -h --total | grep total")
+        raw = self.executor.run_command("df -BG / | grep /")
         parts = raw.split()
         if len(parts) >= 3:
             used = parts[2]
@@ -613,21 +598,6 @@ class SystemInformation:
         # Final fallback to uname
         hostname = self.executor.run_command("uname -n")
         return hostname.strip() if hostname else "Unknown"
-
-    def get_gpu_load(self):
-        # Try NVIDIA GPU load
-        nvidia_output = self.executor.run_command(
-            "nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null"
-        )
-        if nvidia_output and nvidia_output.isdigit():
-            return f"{nvidia_output.strip()}%"
-        
-        # Optional: Check if radeontop exists for AMD, not guaranteed
-        # amd_output = self.executor.run("radeontop -d - -l 1 | grep 'gpu'")  # Very unreliable
-
-        # Add similar check for Intel GPU if needed
-
-        return "Unavailable"
 
     
     def collect_all_info(self):
@@ -654,7 +624,6 @@ class SystemInformation:
             "uptime": self.get_uptime(),
             "cpu": self.get_cpu_load(),
             "memory": self.get_memory_load(),
-            "disk": self.get_disk_load(),
-            "gpu": self.get_gpu_load()
+            "disk": self.get_disk_load()
             # "network": self.get_network_usage()
         }
