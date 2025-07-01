@@ -7,17 +7,6 @@ logger = get_logger("CommandExecutor")
 
 
 def execute_command(cmd: str, timeout: int = 10) -> Tuple[str, bool]:
-    """Execute a shell command and return its output.
-    
-    Args:
-        cmd: The command string to execute
-        timeout: Maximum execution time in seconds (default: 10)
-        
-    Returns:
-        Tuple of (output, success):
-        - output: Combined stdout and stderr output, or timeout message
-        - success: Boolean indicating if command succeeded
-    """
     try:
         process = subprocess.Popen(
             cmd,
@@ -30,12 +19,10 @@ def execute_command(cmd: str, timeout: int = 10) -> Tuple[str, bool]:
         stdout, stderr = process.communicate(timeout=timeout)
         success = (process.returncode == 0)
         
-        # Combine stdout and stderr
         output = stdout
         if stderr:
             output += f"\n--- stderr ---\n{stderr}"
         
-        # Truncate if too large
         output = truncate_output(output)
         
         return output, success
@@ -54,20 +41,9 @@ def truncate_output(
     max_length: int = 8192, 
     max_lines: int = 100
 ) -> str:
-    """Truncate command output if it exceeds limits.
-    
-    Args:
-        output: The command output string
-        max_length: Maximum number of characters (default: 8KB)
-        max_lines: Maximum number of lines (default: 100)
-        
-    Returns:
-        Truncated output string with indicator if truncation occurred
-    """
     if not output:
         return output
         
-    # Check if output exceeds line limit
     lines = output.splitlines()
     if len(lines) > max_lines:
         lines_truncated = len(lines) - max_lines
@@ -75,7 +51,6 @@ def truncate_output(
         truncated_lines.append(f"\n... output truncated ({lines_truncated} more lines) ...")
         output = "\n".join(truncated_lines)
         
-    # Check if output exceeds character limit
     if len(output) > max_length:
         chars_truncated = len(output) - max_length
         output = output[:max_length] + f"\n... output truncated ({chars_truncated} more characters) ..."

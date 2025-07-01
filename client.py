@@ -11,12 +11,10 @@ from system_information import SystemInformation
 
 
 class LinuxCommandClient:
-    """WebSocket client for executing Linux commands remotely."""
     
-    # Constants
     CONNECTION_TIMEOUT = 0.5
     RECONNECTION_INTERVAL = 1.0
-    REGISTRATION_TIMEOUT = 5.0  # Time to wait for registration response
+    REGISTRATION_TIMEOUT = 5.0 
     
     def __init__(
         self, 
@@ -26,22 +24,13 @@ class LinuxCommandClient:
         connection_code: Optional[str] = None,
         connection_code_callback: Optional[Callable[[], str]] = None
     ):
-        """Initialize the Linux command client.
-        
-        Args:
-            server_url: HTTP endpoint for the server (e.g., http://localhost:3000)
-            websocket_url: WebSocket endpoint (e.g., ws://localhost:3000)
-            device_id: Optional device ID. If not provided, MAC address will be used.
-            connection_code: Connection code for device pairing
-            connection_code_callback: Function to call when a new connection code is needed
-        """
+
         self.server_url = server_url.rstrip('/')
         self.websocket_url = websocket_url
         self.device_id = device_id or str(uuid.getnode())
         self.connection_code = connection_code
         self.connection_code_callback = connection_code_callback
         
-        # Connection state
         self._ws = None
         self._connected = False
         self._connecting = False
@@ -55,11 +44,9 @@ class LinuxCommandClient:
         
     @property
     def connected(self) -> bool:
-        """Check if the client is connected."""
         return self._connected
     
     def connect(self) -> None:
-        """Establish WebSocket connection and register the device."""
         if self._connecting:
             self._logger.debug("Connection attempt already in progress, skipping")
             return
@@ -76,11 +63,9 @@ class LinuxCommandClient:
                 on_open=self._on_open
             )
             
-            # Start WebSocket connection in a separate thread
             ws_thread = threading.Thread(target=self._ws.run_forever, daemon=True)
             ws_thread.start()
             
-            # Give some time for connection to establish
             time.sleep(self.CONNECTION_TIMEOUT)
         except Exception as e:
             self._logger.error(f"Failed to connect: {e}")
@@ -88,21 +73,17 @@ class LinuxCommandClient:
             self._connecting = False
     
     def disconnect(self) -> None:
-        """Close the WebSocket connection."""
         self._shutdown_requested = True
         if self._ws:
             self._ws.close()
     
     def run(self) -> None:
-        """Run the client, maintaining connection to the server."""
         try:
             self.connect()
             
             while not self._shutdown_requested:
                 if self._connected:
                     self._send_system_information()
-                elif not self._connecting:
-                    # Check if registration failed and we need a new connection code
                     if self._registration_failed and self.connection_code_callback:
                         self._logger.info("Registration failed. Requesting new connection code...")
                         try:
@@ -120,7 +101,6 @@ class LinuxCommandClient:
                         self._logger.info("Not connected. Attempting to reconnect...")
                         self._reconnect()
                 
-                # Check for registration timeout
                 if self._registration_pending and self._registration_start_time:
                     if time.time() - self._registration_start_time > self.REGISTRATION_TIMEOUT:
                         self._logger.warning("Registration timeout - treating as failed")
@@ -140,7 +120,6 @@ class LinuxCommandClient:
             self.disconnect()
     
     def _reconnect(self) -> None:
-        """Attempt to reconnect to the server."""
         if not self._connecting and not self._connected and not self._shutdown_requested:
             self._logger.info("Attempting to reconnect...")
             try:
@@ -149,7 +128,6 @@ class LinuxCommandClient:
                 self._logger.error(f"Reconnection failed: {e}")
     
     def _on_message(self, ws, message: str) -> None:
-        """Handle incoming WebSocket messages."""
         try:
             data = json.loads(message)
             self._logger.info(f"Received message: {data}")
@@ -171,23 +149,19 @@ class LinuxCommandClient:
             self._logger.error(f"Error in message handler: {e}")
     
     def _on_error(self, ws, error) -> None:
-        """Handle WebSocket errors."""
         self._logger.error(f"WebSocket error: {error}")
         self._connected = False
         self._connecting = False
     
     def _on_close(self, ws, close_status_code, close_msg) -> None:
-        """Handle WebSocket connection close."""
         self._logger.info(f"WebSocket connection closed: {close_status_code} - {close_msg}")
         self._connected = False
         self._connecting = False
     
     def _on_open(self, ws) -> None:
-        """Handle WebSocket connection open."""
         self._logger.info("WebSocket connection established")
     
     def _register_device(self) -> None:
-        """Register the device with the server via WebSocket."""
         if not self._ws:
             self._logger.error("Cannot register: WebSocket not available")
             return
@@ -204,7 +178,6 @@ class LinuxCommandClient:
             self._ws.send(json.dumps(registration_data))
             self._logger.info(f"Sent registration for device ID: {self.device_id}")
             
-            # Start tracking registration timeout
             self._registration_pending = True
             self._registration_start_time = time.time()
             
@@ -212,7 +185,6 @@ class LinuxCommandClient:
             self._logger.error(f"Failed to register device: {e}")
     
     def _handle_registration_response(self, data: dict) -> None:
-        """Handle device registration response."""
         self._registration_pending = False
         self._registration_start_time = None
         
@@ -227,7 +199,6 @@ class LinuxCommandClient:
             self._registration_failed = True
     
     def _handle_execute_command(self, data: dict) -> None:
-        """Handle command execution request."""
         command_id = data.get('commandId')
         commands = data.get('commands', [])
         
@@ -238,7 +209,6 @@ class LinuxCommandClient:
         self._execute_commands(commands, command_id)
     
     def _execute_commands(self, commands: List[str], command_id: str) -> None:
-        """Execute the received commands and send back results."""
         for i, cmd in enumerate(commands):
             self._logger.info(f"Executing command {i} (batch {command_id}): {cmd}")
             
@@ -259,7 +229,6 @@ class LinuxCommandClient:
         output: str, 
         success: bool
     ) -> None:
-        """Send command execution results back to the server via WebSocket."""
         if not self._ws or not self._connected:
             self._logger.error("Cannot send results: WebSocket not connected")
             return
@@ -282,7 +251,6 @@ class LinuxCommandClient:
             self._logger.error(f"Error sending command results via WebSocket: {e}")
 
     def _send_system_information(self) -> None:
-        """Send system information to the server."""
         if not self._ws or not self._connected:
             self._logger.error("Cannot send system info: WebSocket not connected")
             return
@@ -298,7 +266,6 @@ class LinuxCommandClient:
             }
             
             self._ws.send(json.dumps(info_data))
-            # self._logger.info("Successfully sent system information")
             
         except Exception as e:
             self._logger.error(f"Error sending system information via WebSocket: {e}")
